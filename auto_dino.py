@@ -3,7 +3,7 @@ import numpy as np
 from PIL import ImageGrab
  
 def approx_dino_contour(game_thresh):
-    dino_img = cv2.imread('dino.png', cv2.IMREAD_GRAYSCALE)
+    dino_img = cv2.imread('imgs/dino.png', cv2.IMREAD_GRAYSCALE)
     _, dino_thresh = cv2.threshold(dino_img, 127, 255,0)
 
     contours, _ = cv2.findContours(dino_thresh, 2, 1)
@@ -47,6 +47,14 @@ def capture_screen():
     return resized_screenshot
 
 
+def revert_colors(thresh_img):
+    black_pixels = np.where(thresh_img == 0)[0], np.where(thresh_img == 0)[1]
+    white_pixels = np.where(thresh_img == 255)[0], np.where(thresh_img == 255)[1]
+    thresh_img[black_pixels] = 255
+    thresh_img[white_pixels] = 0
+    return thresh_img
+
+
 whole_screen = capture_screen()
 # Select region of interest then press ENTER
 roi = cv2.selectROI("ROI", whole_screen) 
@@ -55,6 +63,8 @@ while True:
     roi_screenshot = capture_screen()[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
     grayscale_game_img = cv2.cvtColor(roi_screenshot, cv2.COLOR_BGR2GRAY)
     _, game_thresh = cv2.threshold(grayscale_game_img, 127, 255,0)
+    if game_thresh[0, 0] == 0:
+        game_thresh = revert_colors(game_thresh)
     game_dino_contour = approx_dino_contour(game_thresh)
 
     if len(game_dino_contour) > 1:
