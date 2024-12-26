@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from PIL import ImageGrab
 import time
+import pyautogui
 
 class dino():
     def __init__(self):
@@ -83,7 +84,7 @@ class dino():
 
         if len(game_dino_contour) > 1:
             obstacle_start_x, game_dino_width = self.nearest_obstacle_start(game_dino_contour, game_thresh)
-            if obstacle_start_x - self.min_obstacle_x <= (game_dino_width * 0.5):
+            if (obstacle_start_x - self.min_obstacle_x) >= 0 and (obstacle_start_x - self.min_obstacle_x) <= (game_dino_width * 3):
                 return True
 
         return False
@@ -109,6 +110,7 @@ whole_screen = capture_screen()
 roi = cv2.selectROI("ROI", whole_screen) 
 
 rex = dino()
+just_jumped = False
 
 while True:
     roi_screenshot = capture_screen()[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
@@ -119,6 +121,9 @@ while True:
         game_thresh = revert_colors(game_thresh)
     
     jump = rex.jump_now(game_thresh)
+    if jump and not just_jumped:
+        pyautogui.press('up')
+    just_jumped = jump
 
     cv2.imshow("ROI", game_thresh)
     if cv2.waitKey(1) & 0xFF == ord('q'):
