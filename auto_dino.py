@@ -21,6 +21,14 @@ class dino:
 
         self.obstacle_view_thresh = None
 
+        self.is_ascending_to_top = False
+        self.ascent_start_time = None
+        self.secs_to_top_of_obstacle = 0.2
+
+        self.is_over_obstacle = False
+        self.secs_over_obstacle = 0.5
+        self.over_obstacle_start_time = None
+
 
     def generate_model_dino_contour(self): 
         model_dino_img = cv2.imread('imgs/dino.png', cv2.IMREAD_GRAYSCALE)
@@ -104,7 +112,7 @@ class dino:
         if len(obstacle_x_coors) >= 1:
             obstacle_start_x = min(obstacle_x_coors)
         else:
-            obstacle_start_x = game_thresh.shape[1] - 1
+            obstacle_start_x = None
 
         self.prev_dino_contour = self.curr_dino_contour.copy()
 
@@ -112,18 +120,59 @@ class dino:
 
     
     def jump_now(self, nearest_obstacle):
-        if ((nearest_obstacle.start_x - self.min_obstacle_x) >= 0 and
-            (nearest_obstacle.start_x - self.min_obstacle_x) <= (self.get_game_dino_width() * 3)):
-            return True
+        if not self.is_ascending_to_top and not self.is_over_obstacle:
+            approx_obstacle_velocity = nearest_obstacle.velocity
 
+            print(self.secs_over_obstacle)
+            print(self.secs_to_top_of_obstacle)
+            print()
+
+            # approximate start of the obstacle after dino reaches its top
+            adjusted_obstacle_end_x = nearest_obstacle.end_x - (approx_obstacle_velocity * self.secs_to_top_of_obstacle)
+            left_most_point = self.calculate_dino_contour_properties(self.curr_dino_contour)["left_most_point"]
+            if left_most_point > (adjusted_obstacle_end_x - (approx_obstacle_velocity * self.secs_over_obstacle)):
+                self.is_ascending_to_top = True
+                self.ascent_start_time = time.time()
+                return True
         return False
+
+    
+    def update_jump_properties(self, nearest_obstacle):
+        bottom_point = self.calculate_dino_contour_properties(self.curr_dino_contour)["bottom_point"]
+        if bottom_point < nearest_obstacle.top_point:
+            self.is_ascending_to_top = False
+            if self.is_over_obstacle:
+                self.secs_over_obstacle = time.time() - self.over_obstacle_start_time
+            else:
+                self.is_over_obstacle = True
+                self.over_obstacle_start_time = time.time()
+        else:
+            self.is_over_obstacle = False
+
+        if self.is_ascending_to_top:
+            self.secs_to_top_of_obstacle = time.time() - self.ascent_start_time
 
 
 
 class obstacle:
-    def __init__(self, obstacle_start_x, obstacle_view_thresh, game_dino_width):
-        self.start_x = obstacle_start_x
-        self.end_x = self.calculate_end_x(obstacle_view_thresh, game_dino_width)
+    def __init__(self):
+        self.start_x = None
+        self.end_x = None
+        self.top_point = None
+        
+        self.prev_start_x = None
+        self.last_recorded_velocity_time = 0
+        self.velocity = 0
+
+    def update_position_properties(self, dino, game_thresh):
+        self.start_x = dino.nearest_obstacle_start(game_thresh)
+        if self.start_x == None:
+            self.start_x = game_thresh.shape[1] - 1
+            self.end_x = self.start_x
+            self.top_point = 0
+        else:
+            self.end_x = self.calculate_end_x(dino.obstacle_view_thresh, dino.get_game_dino_width())
+            self.top_point = self.calculate_top_point(dino.max_obstacle_y, game_thresh)
 
 
     def calculate_end_x(self, obstacle_view_thresh, game_dino_width):
@@ -131,14 +180,37 @@ class obstacle:
         while True:
             window_start = curr_end_x + 1
             window_end = window_start + game_dino_width
-            window_obstacle_x_coors = np.where(obstacle_view_thresh[:, window_start:window_end] == 0)[1] + window_start
-            if len(window_obstacle_x_coors) >= 1:
-                curr_end_x = max(window_obstacle_x_coors)
+            obstacle_window_x_coors = np.where(obstacle_view_thresh[:, window_start:window_end] == 0)[1] + window_start
+            if len(obstacle_window_x_coors) >= 1:
+                curr_end_x = max(obstacle_window_x_coors)
             else:
                 break
                 
         return curr_end_x
 
+    def calculate_top_point(self, min_top_point, game_thresh):
+        curr_top_point = min_top_point
+        while True:
+            curr_top_point -= 1
+            obstacle_window_row = game_thresh[curr_top_point, self.start_x:self.end_x]
+            if len(np.where(obstacle_window_row ==0)[0]) == 0:
+                break
+        
+        return curr_top_point
+
+    def update_velocity(self):
+        if self.prev_start_x == None:
+            self.prev_start_x = self.start_x
+
+        x_delta = max(0, self.prev_start_x - self.start_x)
+        time_passed = time.time() - self.last_recorded_velocity_time
+
+        self.prev_start_x = self.start_x
+        self.last_recorded_velocity_time = time.time()
+
+        self.velocity = x_delta / time_passed
+        return self.velocity
+          
 
 
 def capture_screen():
@@ -162,7 +234,7 @@ whole_screen = capture_screen()
 roi = cv2.selectROI("ROI", whole_screen) 
 
 rex = dino()
-nearest_obstacle = None
+nearest_obstacle = obstacle()
 
 while True:
     roi_screenshot = capture_screen()[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
@@ -176,15 +248,19 @@ while True:
 
     if game_dino_contour is not None:
 
-        obstacle_start_x= rex.nearest_obstacle_start(game_thresh)
-        nearest_obstacle = obstacle(obstacle_start_x, rex.obstacle_view_thresh, rex.get_game_dino_width())
+        nearest_obstacle.update_position_properties(rex, game_thresh)
+        if time.time() - nearest_obstacle.last_recorded_velocity_time > 1:
+            nearest_obstacle.update_velocity()
+
+        rex.update_jump_properties(nearest_obstacle)
 
         jump = rex.jump_now(nearest_obstacle)
         if jump:
             pyautogui.press('up')
 
-        cv2.line(game_thresh, (nearest_obstacle.start_x, 0), (nearest_obstacle.start_x, (game_thresh.shape[0] - 1)), 127, 3)
-        cv2.line(game_thresh, (nearest_obstacle.end_x, 0), (nearest_obstacle.end_x, (game_thresh.shape[0] - 1)), 127, 3)
+        cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top_point), (nearest_obstacle.start_x, (game_thresh.shape[0] - 1)), 127, 3)
+        cv2.line(game_thresh, (nearest_obstacle.end_x, nearest_obstacle.top_point), (nearest_obstacle.end_x, (game_thresh.shape[0] - 1)), 127, 3)
+        cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top_point), (nearest_obstacle.end_x, nearest_obstacle.top_point), 127, 3)
         cv2.imshow("Obstacle View", rex.obstacle_view_thresh)
     
     cv2.imshow("ROI", game_thresh)
