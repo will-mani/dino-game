@@ -2,7 +2,9 @@
 Automating Chrome's offline game
 
 Notes:
+
 About 20 frames per second
+
 Need to base jump now on 
 - "velocity",
 - height,
