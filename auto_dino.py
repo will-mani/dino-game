@@ -41,6 +41,7 @@ class dino:
 
 
     def approx_game_dino_contour(self, game_thresh):
+        
         game_contours, _ = cv2.findContours(game_thresh, 2, 1)
         min_difference = float('inf')
         for contour in game_contours:
@@ -124,23 +125,17 @@ class dino:
         game_dino_properties_dict = self.calculate_dino_contour_properties(self.curr_dino_contour)
         left_most_point = game_dino_properties_dict["left_most_point"]
         right_most_point = game_dino_properties_dict["right_most_point"]
-
-        if self.is_ascending_to_top:
-            print("To the skies!")
-        else:
-            print("No sky.")
+        bottom_point = game_dino_properties_dict["bottom_point"]
 
         if not self.is_ascending_to_top and not self.is_over_obstacle and right_most_point < nearest_obstacle.start_x:
             approx_obstacle_velocity = nearest_obstacle.pixels_per_sec
 
-            print(self.secs_over_obstacle)
-            print(self.secs_to_top_of_obstacle)
-            print()
-
             # approximate end of the obstacle after dino reaches its top
-            adjusted_obstacle_end_x = nearest_obstacle.end_x - (approx_obstacle_velocity * self.secs_to_top_of_obstacle)
+            adjusted_obstacle_end_x = nearest_obstacle.end_x - (approx_obstacle_velocity * ((self.secs_to_top_of_obstacle / (nearest_obstacle.prev_top_point - bottom_point)) * (nearest_obstacle.top_point - bottom_point)))
 
-            if left_most_point > (adjusted_obstacle_end_x - (approx_obstacle_velocity * self.secs_over_obstacle)):
+            if left_most_point > (adjusted_obstacle_end_x - (approx_obstacle_velocity * ((self.secs_over_obstacle / (nearest_obstacle.prev_end_x - nearest_obstacle.prev_start_x)) * (nearest_obstacle.end_x - nearest_obstacle.start_x)))):
+
+                print(self.secs_to_top_of_obstacle)
 
                 return True
 
@@ -169,6 +164,10 @@ class obstacle:
         self.start_x = None
         self.end_x = None
         self.top_point = None
+
+        self.prev_start_x = None
+        self.prev_end_x = None
+        self.prev_top_point = None
         
         self.reached_dino_right_most_point = False
         self.dino_right_most_point_timestamp = None
@@ -229,10 +228,11 @@ class obstacle:
 
         self.previously_in_collision_range = self.reached_dino_right_most_point
 
+global jump_count
+jump_count = 0
 
-
-def capture_screen():
-    screenshot = ImageGrab.grab()
+def capture_screen(image_grab_bbox):
+    screenshot = ImageGrab.grab(bbox=image_grab_bbox)
     bgr_screenshot = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
     resized_screenshot = cv2.resize(bgr_screenshot, (0, 0), fx = 1, fy = 1)
     return resized_screenshot
@@ -247,26 +247,46 @@ def revert_colors(thresh_img):
 
 
 def on_press(key):
+    global jump_count
+    global nearest_obstacle
+    
     if key == keyboard.Key.up or key == keyboard.Key.space:
         print("Jump Time!")
         rex.is_ascending_to_top = True
         rex.ascent_start_timestamp = time.time()
 
+        jump_count += 1
+
+        nearest_obstacle.prev_start_x = nearest_obstacle.start_x
+        nearest_obstacle.prev_end_x = nearest_obstacle.end_x
+        nearest_obstacle.prev_top_point = nearest_obstacle.top_point
+
+
 keyboard_listener = keyboard.Listener(on_press=on_press)
 keyboard_listener.start()
 
 
-whole_screen = capture_screen()
+whole_screen = capture_screen(image_grab_bbox=None)
 # Select region of interest then press ENTER
 roi = cv2.selectROI("ROI", whole_screen) 
 
 rex = dino()
+global nearest_obstacle
 nearest_obstacle = obstacle()
 
 auto_pilot = False # human starts game off in control to set: obstacle.pixels_per_sec, dino.secs_to_top_of_obstacle, and dino.secs_over_obstacle
 
+# frame_count = 0
+# sec_start = time.time()
 while True:
-    roi_screenshot = capture_screen()[int(roi[1]):int(roi[1]+roi[3]), int(roi[0]):int(roi[0]+roi[2])]
+    # if time.time() - sec_start >= 1:
+    #     print(frame_count)
+    #     frame_count = 0
+    #     sec_start = time.time()
+    # else:
+    #     frame_count += 1
+
+    roi_screenshot = capture_screen(image_grab_bbox=(int(roi[0]), int(roi[1]), int(roi[0]+roi[2]), int(roi[1]+roi[3])))
     grayscale_game_img = cv2.cvtColor(roi_screenshot, cv2.COLOR_BGR2GRAY)
     _, game_thresh = cv2.threshold(grayscale_game_img, 127, 255,0)
     
@@ -282,15 +302,13 @@ while True:
 
         rex.update_jump_properties(nearest_obstacle)
 
-        print(nearest_obstacle.pixels_per_sec)
-
         if auto_pilot:
             if rex.jump_now(nearest_obstacle):
                 pyautogui.press('up')
 
-        cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top_point), (nearest_obstacle.start_x, (game_thresh.shape[0] - 1)), 127, 3)
-        cv2.line(game_thresh, (nearest_obstacle.end_x, nearest_obstacle.top_point), (nearest_obstacle.end_x, (game_thresh.shape[0] - 1)), 127, 3)
-        cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top_point), (nearest_obstacle.end_x, nearest_obstacle.top_point), 127, 3)
+        cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top_point), (nearest_obstacle.start_x, (game_thresh.shape[0] - 1)), 127 * (not rex.is_over_obstacle), 3)
+        cv2.line(game_thresh, (nearest_obstacle.end_x, nearest_obstacle.top_point), (nearest_obstacle.end_x, (game_thresh.shape[0] - 1)), 127 * (not rex.is_over_obstacle), 3)
+        cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top_point), (nearest_obstacle.end_x, nearest_obstacle.top_point), 127 * (not rex.is_over_obstacle), 3)
         cv2.imshow("Obstacle View", rex.obstacle_view_thresh)
     
     cv2.imshow("ROI", game_thresh)
@@ -310,3 +328,8 @@ while True:
         print("Dino Re-initialized!")
         auto_pilot = False
         print("Auto Pilot off.")
+        jump_count = 0
+
+    if jump_count == 3:
+        auto_pilot = True
+        print("Three man(ual) jumps complete.\nAuto Pilot Enabled.")
