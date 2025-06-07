@@ -21,7 +21,7 @@ class dino:
 
         self.last_off_gorund_timestamp = 0
         self.close_to_ground_min_y = None
-        self.close_to_ground_dino_height_percentage = 0.5
+        self.close_to_ground_dino_height_percentage = 1
         self.is_close_to_ground = True
     
         self.obstacle_view_min_x= None
@@ -35,7 +35,9 @@ class dino:
         self.is_ascending_to_min_y = False
         self.ascent_start_timestamp = None
         self.secs_to_top_of_min_y = 0
-        # min_y is short for obstacle_view_min_y
+        # ^^^ min_y is short for obstacle_view_min_y
+
+        self.obstacle_velocity_multiplier = 1.6
 
 
     def generate_model_contour(self): 
@@ -94,7 +96,7 @@ class dino:
 
         self.obstacle_view_thresh = game_thresh.copy()
         self.obstacle_view_thresh[:, :self.obstacle_view_min_x] = 127
-        self.obstacle_view_thresh[self.obstacle_view_max_y:, :] = 127
+        self.obstacle_view_thresh[self.obstacle_view_max_y + 1:, :] = 127
         self.obstacle_view_thresh[:self.obstacle_view_min_y, :] = 127
         cv2.drawContours(self.obstacle_view_thresh, [self.curr_contour], 0, 255, -1)
 
@@ -103,12 +105,11 @@ class dino:
         if (not self.is_ascending_to_min_y and self.is_close_to_ground 
             and self.right_most_point < nearest_obstacle.start_x and self.top_point < nearest_obstacle.bottom):
 
-            adjusted_obstacle_start = nearest_obstacle.start_x * 0.8
-            adjusted_obstacle_velocity = nearest_obstacle.pixels_per_sec * 1.25
+            adjusted_obstacle_velocity = nearest_obstacle.pixels_per_sec * self.obstacle_velocity_multiplier
 
             # print(adjusted_obstacle_velocity)
 
-            if (adjusted_obstacle_start - (adjusted_obstacle_velocity * self.secs_to_top_of_min_y)) <= self.right_most_point:
+            if (nearest_obstacle.start_x - (adjusted_obstacle_velocity * self.secs_to_top_of_min_y)) <= self.right_most_point:
                 return True
 
         return False
@@ -194,11 +195,11 @@ class obstacle:
 
     def update_pixels_per_sec(self):
         if self.is_visible:
-            if self.end_x > self.last_visible_end_x and len(self.velocity_dict['secs_passed_list']) > 1:
+            if len(self.velocity_dict['secs_passed_list']) > 1:
                 x, y = self.velocity_dict['secs_passed_list'], self.velocity_dict['displacement_list']
                 # best_fit_slope, _ = np.polyfit(x, y, deg=1)
                 self.pixels_per_sec = y[-1] / x[-1]# best_fit_slope
-                print(self.pixels_per_sec)
+                ##print(self.pixels_per_sec)
 
             if self.end_x > self.last_visible_end_x or self.respawn_timestamp == None:
                 self.respawn_timestamp = time.time()
@@ -287,8 +288,13 @@ while True:
 
         if auto_pilot:
             if rex.jump_now(nearest_obstacle):
-                pyautogui.press('up')
-                pyautogui.keyUp('up')
+                if nearest_obstacle.bottom == rex.obstacle_view_max_y:
+                    pyautogui.press('up')
+                    pyautogui.keyUp('up')
+                else:
+                    print("Limbmode")
+                    pyautogui.press('down')
+                    pyautogui.keyUp('down')
 
         cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top), (nearest_obstacle.start_x, nearest_obstacle.bottom), 127, 3)
         cv2.line(game_thresh, (nearest_obstacle.end_x, nearest_obstacle.top), (nearest_obstacle.end_x, nearest_obstacle.bottom), 127, 3)
