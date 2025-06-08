@@ -37,7 +37,7 @@ class dino:
         self.secs_to_top_of_min_y = 0
         # ^^^ min_y is short for obstacle_view_min_y
 
-        self.obstacle_velocity_multiplier = 1.6
+        self.obstacle_velocity_multiplier = 1.65
 
 
     def generate_model_contour(self): 
@@ -292,8 +292,12 @@ while True:
                     pyautogui.press('up')
                     pyautogui.keyUp('up')
                 else:
-                    print("Limbmode")
-                    pyautogui.press('down')
+                    pyautogui.keyDown('down')
+                    flyover_secs = ((nearest_obstacle.end_x - nearest_obstacle.start_x) + rex.width) * nearest_obstacle.pixels_per_sec
+                    start_time = time.time()
+                    while True:
+                        if time.time() - start_time > 0.2:
+                            break
                     pyautogui.keyUp('down')
 
         cv2.line(game_thresh, (nearest_obstacle.start_x, nearest_obstacle.top), (nearest_obstacle.start_x, nearest_obstacle.bottom), 127, 3)
