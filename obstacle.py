@@ -17,7 +17,7 @@ class Obstacle:
         self.is_on_screen = True
 
 
-    def update_position_properties(self, obstacle_view_thresh, dino_width):
+    def update_position_properties(self, game_thresh, obstacle_view_thresh, dino_width):
         self.start_x = self.calculate_start_x(obstacle_view_thresh)
         if self.start_x == None:
             self.is_on_screen = False
@@ -29,7 +29,7 @@ class Obstacle:
             self.is_on_screen = False
             return 
         
-        self.top, self.bottom = self.calculate_top_and_bottom(obstacle_view_thresh)
+        self.top, self.bottom = self.calculate_top_and_bottom(game_thresh, obstacle_view_thresh)
 
     
     def calculate_start_x(self, obstacle_view_thresh):
@@ -56,12 +56,15 @@ class Obstacle:
         return curr_end_x
     
 
-    def calculate_top_and_bottom(self, obstacle_view_thresh):
-        window_end = self.end_x + 1
-        obstacle_view_window = obstacle_view_thresh[:, :window_end]
+    def calculate_top_and_bottom(self, game_thresh, obstacle_view_thresh):
+        obstacle_view_window = obstacle_view_thresh[:, :self.end_x + 1]
         obstacle_y_coors = np.where(obstacle_view_window == 0)[0]
         obstacle_top_point = min(obstacle_y_coors)
-        obstacle_bottom_point = max(obstacle_y_coors)
+        game_thresh_window = game_thresh[obstacle_top_point:, self.start_x : self.end_x + 1]
+        game_window_black_ys = set(np.where(game_thresh_window == 0)[0])
+        game_window_white_ys = set(np.where(game_thresh_window == 255)[0])
+        set_difference = game_window_white_ys - game_window_black_ys
+        obstacle_bottom_point = min(set_difference) + obstacle_top_point
         return obstacle_top_point, obstacle_bottom_point
     
 
