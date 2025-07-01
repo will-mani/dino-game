@@ -64,6 +64,8 @@ rex = Dino()
 obstacle_list = []
 secs_per_frame = 0
 
+down_relase_timestamp = time.time()
+
 while True:
 
     frame_start_timestamp = time.time()
@@ -82,6 +84,7 @@ while True:
 
         rex.update_contour_properties()
         rex.update_obstacle_view_properties(game_thresh)
+        rex.update_jump_properties()
 
         obstacle_list = update_obstacle_list(rex, obstacle_list, game_thresh)
 
@@ -91,13 +94,14 @@ while True:
             if threatening_obstacle.bottom > rex.obstacle_view_max_y:
                 thread_u = threading.Thread(target=press_up)
                 thread_u.start()
-            elif rex.top_point < threatening_obstacle.bottom and threatening_obstacle.pixels_per_sec > 0 and obstacle_width > rex.width / 2:
+            elif (time.time() > down_relase_timestamp and rex.top_point < threatening_obstacle.bottom 
+                  and threatening_obstacle.pixels_per_sec > 0 and obstacle_width > rex.width / 2):
                 distance = abs(threatening_obstacle.start_x - rex.left_most_point)
                 obstacle_width = abs(threatening_obstacle.end_x - threatening_obstacle.start_x)
                 approx_secs_over = (obstacle_width + distance) / threatening_obstacle.pixels_per_sec
-                approx_relase_time = time.time() + approx_secs_over
+                down_relase_timestamp = time.time() + approx_secs_over
                 print(threatening_obstacle.end_x - threatening_obstacle.start_x, ',', threatening_obstacle.bottom - threatening_obstacle.top)
-                thread_d = threading.Thread(target=press_down, args=(approx_relase_time,))
+                thread_d = threading.Thread(target=press_down, args=(down_relase_timestamp,))
                 thread_d.start()
 
         obstacle_count = len(obstacle_list)

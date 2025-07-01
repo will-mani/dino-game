@@ -25,10 +25,15 @@ class Dino:
         self.obstacle_view_max_height_percentage = 1.2
         self.obstacle_view_min_y = None
 
+        self.on_ground_top_point = None
+
         self.obstacle_view_thresh = None
 
-        self.obstacle_velocity_multiplier = 1
-        self.distance_width_multiplier = 2
+        self.obstacle_velocity_multiplier = 1.25
+        self.safety_width_multiplier = 0
+        self.last_on_ground_time_stamp = None
+        self.was_below_min_y = True
+        self.secs_to_min_y = 10
 
 
     def generate_model_contour(self): 
@@ -83,6 +88,7 @@ class Dino:
             self.obstacle_view_min_x = self.right_most_point
             self.obstacle_view_max_y = self.bottom_point - int(self.height * self.obstacle_view_min_height_percentage)
             self.obstacle_view_min_y = self.bottom_point - int(self.height * self.obstacle_view_max_height_percentage)
+            self.on_ground_top_point = self.top_point
 
         self.obstacle_view_thresh = game_thresh.copy()
         self.obstacle_view_thresh[:, :self.obstacle_view_min_x] = 127
@@ -90,13 +96,26 @@ class Dino:
         self.obstacle_view_thresh[:self.obstacle_view_min_y, :] = 127
         cv2.drawContours(self.obstacle_view_thresh, [self.contour], 0, 255, -1)
 
+    def update_jump_properties(self):
+
+        if self.top_point >= self.on_ground_top_point:
+            self.last_on_ground_timestamp = time.time()
+        
+        elif self.was_below_min_y and self.bottom_point <= self.obstacle_view_min_y and self.prev_top_point >= self.top_point:
+            self.secs_to_min_y = time.time() - self.last_on_ground_timestamp
+            self.was_below_min_y = False
+            print("Time:", self.secs_to_min_y, "\n")
+            
+        if self.bottom_point > self.obstacle_view_min_y:
+            self.was_below_min_y = True
 
     def jump_or_duck_obstacle(self, obstacle_list, secs_per_frame):
         obstacle_count = len(obstacle_list)
         for i in range(min(2, obstacle_count)):
             obstacle = obstacle_list[i]
             adjusted_obstacle_velocity = obstacle.pixels_per_sec * self.obstacle_velocity_multiplier
-            if (obstacle.start_x - (adjusted_obstacle_velocity * secs_per_frame)) <= (self.right_most_point + (self.width * self.distance_width_multiplier)):
+            secs_to_reach_safety = self.secs_to_min_y + secs_per_frame
+            if (obstacle.start_x - (adjusted_obstacle_velocity * secs_to_reach_safety)) <= (self.right_most_point + (self.width * self.safety_width_multiplier)):
                 return obstacle
               
         return None
