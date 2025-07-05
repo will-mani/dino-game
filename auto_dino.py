@@ -65,6 +65,7 @@ obstacle_list = []
 secs_per_frame = 0
 
 down_relase_timestamp = time.time()
+last_obstacle_id = None
 
 while True:
 
@@ -89,20 +90,24 @@ while True:
         obstacle_list = update_obstacle_list(rex, obstacle_list, game_thresh)
 
         threatening_obstacle = rex.jump_or_duck_obstacle(obstacle_list, secs_per_frame)
-        if threatening_obstacle != None:
+        if threatening_obstacle != None and threatening_obstacle.id != last_obstacle_id:
             obstacle_width = threatening_obstacle.end_x - threatening_obstacle.start_x + 1
             if threatening_obstacle.bottom > rex.obstacle_view_max_y:
                 thread_u = threading.Thread(target=press_up)
                 thread_u.start()
-            elif (time.time() > down_relase_timestamp and rex.top_point < threatening_obstacle.bottom 
-                  and threatening_obstacle.pixels_per_sec > 0 and obstacle_width > rex.width / 2):
+                last_obstacle_id = threatening_obstacle.id
+                print("Last obstacle id:", last_obstacle_id)
+            elif (rex.top_point < threatening_obstacle.bottom and threatening_obstacle.pixels_per_sec > 0 
+                and obstacle_width > rex.width / 2):
                 distance = abs(threatening_obstacle.start_x - rex.left_most_point)
                 obstacle_width = abs(threatening_obstacle.end_x - threatening_obstacle.start_x)
                 approx_secs_over = (obstacle_width + distance) / threatening_obstacle.pixels_per_sec
                 down_relase_timestamp = time.time() + approx_secs_over
-                print(threatening_obstacle.end_x - threatening_obstacle.start_x, ',', threatening_obstacle.bottom - threatening_obstacle.top)
+                print("Ducked obstacle width, height:", threatening_obstacle.end_x - threatening_obstacle.start_x, ',', threatening_obstacle.bottom - threatening_obstacle.top)
                 thread_d = threading.Thread(target=press_down, args=(down_relase_timestamp,))
                 thread_d.start()
+                last_obstacle_id = threatening_obstacle.id
+                print("Last obstacle id:", last_obstacle_id)
 
         obstacle_count = len(obstacle_list)
         color_list = [(114, 97, 78), (36, 79, 36), (24, 51, 97), (41, 56, 73)]

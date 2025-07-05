@@ -29,11 +29,11 @@ class Dino:
 
         self.obstacle_view_thresh = None
 
-        self.obstacle_velocity_multiplier = 1.25
-        self.safety_width_multiplier = 0
+        self.obstacle_velocity_multiplier = 1
+        self.padding_width_percentage = 1
         self.last_on_ground_time_stamp = None
         self.was_below_min_y = True
-        self.secs_to_min_y = 10
+        self.secs_to_min_y = 0.05
 
 
     def generate_model_contour(self): 
@@ -102,9 +102,12 @@ class Dino:
             self.last_on_ground_timestamp = time.time()
         
         elif self.was_below_min_y and self.bottom_point <= self.obstacle_view_min_y and self.prev_top_point >= self.top_point:
-            self.secs_to_min_y = time.time() - self.last_on_ground_timestamp
+            curr_secs_to_min_y = time.time() - self.last_on_ground_timestamp
+            if self.secs_to_min_y < curr_secs_to_min_y:
+                self.secs_to_min_y = curr_secs_to_min_y
             self.was_below_min_y = False
-            print("Time:", self.secs_to_min_y, "\n")
+            print("Curr rise time:", curr_secs_to_min_y)
+            print("Max rise time:", self.secs_to_min_y, "\n")
             
         if self.bottom_point > self.obstacle_view_min_y:
             self.was_below_min_y = True
@@ -115,7 +118,7 @@ class Dino:
             obstacle = obstacle_list[i]
             adjusted_obstacle_velocity = obstacle.pixels_per_sec * self.obstacle_velocity_multiplier
             secs_to_reach_safety = self.secs_to_min_y + secs_per_frame
-            if (obstacle.start_x - (adjusted_obstacle_velocity * secs_to_reach_safety)) <= (self.right_most_point + (self.width * self.safety_width_multiplier)):
+            if (obstacle.start_x - (adjusted_obstacle_velocity * secs_to_reach_safety)) <= (self.obstacle_view_min_x + (self.width * self.padding_width_percentage)):
                 return obstacle
               
         return None

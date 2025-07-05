@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import uuid
 
 class Obstacle:
     def __init__(self):
@@ -15,6 +16,7 @@ class Obstacle:
         self.velocity_dict = {"secs_passed_list":[], "displacement_list":[]}
 
         self.is_on_screen = True
+        self.id = uuid.uuid4()
 
 
     def update_position_properties(self, game_thresh, obstacle_view_thresh, dino_width):
